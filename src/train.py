@@ -132,7 +132,7 @@ def save_checkpoint(
     with open(os.path.join(checkpoint_dir, "training_history.json"), "w") as f:
         json.dump(history or [], f, indent=2)
 
-def upload_checkpoint_to_huggingface(checkpoint_dir, repo_id):
+def upload_checkpoint_to_huggingface(checkpoint_dir, repo_id, path_in_repo):
     api = HfApi()
     api.create_repo(
         repo_id=repo_id,
@@ -144,6 +144,7 @@ def upload_checkpoint_to_huggingface(checkpoint_dir, repo_id):
         folder_path=checkpoint_dir,
         repo_id=repo_id,
         repo_type="model",
+        path_in_repo=path_in_repo,
     )
 
 def train_c1():
@@ -281,6 +282,7 @@ def train_c1():
         type="model",
         metadata={
             "repo_id": config.hf_repo_id,
+            "path_in_repo": config.hf_path_in_repo,
             "best_validation_loss": best_validation_loss,
         },
     )
@@ -291,6 +293,7 @@ def train_c1():
         upload_checkpoint_to_huggingface(
             checkpoint_dir=checkpoint_dir,
             repo_id=config.hf_repo_id,
+            path_in_repo=config.hf_path_in_repo,
         )
     wandb.finish()
 
