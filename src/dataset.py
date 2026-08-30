@@ -6,7 +6,16 @@ import numpy as np
 
 
 from collections import Counter
-from src.constants import PLAIN_TEXT_PATH,CIPHER_TEXT_PATH
+from src.constants import (
+    BIT_ONE_ID,
+    BIT_PAD_ID,
+    BIT_ZERO_ID,
+    BYTE_BOS_ID,
+    BYTE_EOS_ID,
+    BYTE_PAD_ID,
+    CIPHER_TEXT_PATH,
+    PLAIN_TEXT_PATH,
+)
 from src.utils import get_lines_from_file_path
 
 logger = logging.getLogger(__name__)
@@ -150,6 +159,68 @@ class CipherPlainDatasetCollator:
         }
 
 
+class CipherPlainByteCollator:
+
+    def __init__(self, max_src_len=1024, max_target_len=256) -> None:
+        self.max_src_len = max_src_len
+        self.max_target_len = max_target_len
+
+    def encode_cipher_bits(self, cipher_text):
+        return [
+            BIT_ONE_ID if ch == "1" else BIT_ZERO_ID
+            for ch in cipher_text[: self.max_src_len]
+        ]
+
+    def encode_plain_bytes(self, plain_text):
+        return list(plain_text.encode("utf-8"))[: self.max_target_len - 1]
+
+    def __call__(self, batch) -> Any:
+        cipher_ids = [
+            torch.tensor(self.encode_cipher_bits(item["cipher_text"]), dtype=torch.long)
+            for item in batch
+        ]
+
+        cipher_padded = pad_sequence(
+            cipher_ids,
+            batch_first=True,
+            padding_value=BIT_PAD_ID,
+        )
+        cipher_padding_mask = cipher_padded == BIT_PAD_ID
+
+        plain_text = [item["plain_text"] for item in batch]
+        plain_byte_ids = [self.encode_plain_bytes(text) for text in plain_text]
+
+        plain_input_ids = [
+            torch.tensor([BYTE_BOS_ID] + ids, dtype=torch.long)
+            for ids in plain_byte_ids
+        ]
+        plain_target_ids = [
+            torch.tensor(ids + [BYTE_EOS_ID], dtype=torch.long)
+            for ids in plain_byte_ids
+        ]
+
+        plain_padded_input_ids = pad_sequence(
+            plain_input_ids,
+            batch_first=True,
+            padding_value=BYTE_PAD_ID,
+        )
+        plain_padded_target_ids = pad_sequence(
+            plain_target_ids,
+            batch_first=True,
+            padding_value=BYTE_PAD_ID,
+        )
+        plain_padding_mask = plain_padded_input_ids == BYTE_PAD_ID
+
+        return {
+            "cipher_text": cipher_padded,
+            "cipher_padding_mask": cipher_padding_mask,
+            "plain_text": plain_text,
+            "plain_text_input_ids": plain_padded_input_ids,
+            "plain_text_target_ids": plain_padded_target_ids,
+            "plain_text_padding_mask": plain_padding_mask,
+        }
+
+
 def create_datasplits(dataset: CipherPlainDataset, config: ExperimentConfig):
     total_length = len(dataset)
 
@@ -202,5 +273,4 @@ def test_dataset_preparation():
     logger.debug(batch["plain_text_input_ids"].shape)
     logger.debug(batch["plain_text_target_ids"].shape)
     logger.debug(batch["plain_text_padding_mask"].shape)
-
 

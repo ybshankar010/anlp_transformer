@@ -15,6 +15,8 @@ class ExperimentConfig:
     seed: int = 42
     max_src_len: int = 1024
     max_target_len: int = 256
+    blt_patch_size: int = 16
+    blt_local_dim: int = 32
 
     #tokenizer config
     src_pad_id: int = 0

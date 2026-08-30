@@ -9,9 +9,12 @@ from torch.utils.data import DataLoader
 
 from src.dataset import (
     CipherPlainDataset,
+    CipherPlainByteCollator,
     CipherPlainDatasetCollator,
     create_datasplits,
 )
+from src.constants import BYTE_PAD_ID
+from src.models.blt import BLTSeq2SeqTransformer
 from src.tokenizer import BPETokenizer
 from src.models.transformer import Seq2SeqTransformer
 from src.utils import EXPERIMENTS
@@ -22,7 +25,7 @@ from src.plots import plot_training_history
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-TRAINABLE_CONFIG_NAMES = ["C1", "C2", "C3", "C4"]
+TRAINABLE_CONFIG_NAMES = ["C1", "C2", "C3", "C4", "C5"]
 
 def train_one_epoch(model, train_loader, loss_fn, optimizer, device):
     model.train()
@@ -113,8 +116,11 @@ def save_checkpoint(
         os.path.join(checkpoint_dir, "model.pt"),
     )
 
-    cipher_tokenizer.save(os.path.join(checkpoint_dir, "cipher_tokenizer.json"))
-    plain_tokenizer.save(os.path.join(checkpoint_dir, "plain_tokenizer.json"))
+    if cipher_tokenizer is not None:
+        cipher_tokenizer.save(os.path.join(checkpoint_dir, "cipher_tokenizer.json"))
+
+    if plain_tokenizer is not None:
+        plain_tokenizer.save(os.path.join(checkpoint_dir, "plain_tokenizer.json"))
 
     with open(os.path.join(checkpoint_dir, "config.json"), "w") as f:
         json.dump(asdict(config), f, indent=2)
@@ -161,21 +167,30 @@ def train_experiment(config):
     dataset = CipherPlainDataset()
     train_dataset, validation_dataset, _ = create_datasplits(dataset, config)
 
-    cipher_texts = [item["cipher_text"] for item in train_dataset]
-    plain_texts = [item["plain_text"] for item in train_dataset]
+    cipher_tokenizer = None
+    plain_tokenizer = None
 
-    cipher_tokenizer = BPETokenizer(vocab_size=100)
-    plain_tokenizer = BPETokenizer(vocab_size=100)
+    if config.tokenizer_type == "blt":
+        collator = CipherPlainByteCollator(
+            max_target_len=config.max_target_len,
+            max_src_len=config.max_src_len,
+        )
+    else:
+        cipher_texts = [item["cipher_text"] for item in train_dataset]
+        plain_texts = [item["plain_text"] for item in train_dataset]
 
-    cipher_tokenizer.train(cipher_texts[:1000])
-    plain_tokenizer.train(plain_texts[:1000])
+        cipher_tokenizer = BPETokenizer(vocab_size=100)
+        plain_tokenizer = BPETokenizer(vocab_size=100)
 
-    collator = CipherPlainDatasetCollator(
-        cipher_tokenizer=cipher_tokenizer,
-        plain_text_tokenizer=plain_tokenizer,
-        max_target_len=config.max_target_len,
-        max_src_len=config.max_src_len
-    )
+        cipher_tokenizer.train(cipher_texts[:1000])
+        plain_tokenizer.train(plain_texts[:1000])
+
+        collator = CipherPlainDatasetCollator(
+            cipher_tokenizer=cipher_tokenizer,
+            plain_text_tokenizer=plain_tokenizer,
+            max_target_len=config.max_target_len,
+            max_src_len=config.max_src_len
+        )
 
     train_loader = DataLoader(
         train_dataset,
@@ -191,25 +206,41 @@ def train_experiment(config):
         collate_fn=collator,
     )
 
-    model = Seq2SeqTransformer(
-        src_vocab_size=cipher_tokenizer.get_vocab_size(),
-        target_vocab_size=plain_tokenizer.get_vocab_size(),
-        src_pad_id=cipher_tokenizer.pad_token_id,
-        target_pad_id=plain_tokenizer.pad_token_id,
-        d_model=config.d_model,
-        num_heads=config.num_heads,
-        ffn_dim=config.ffn_dim,
-        encoder_layers=config.encoder_layers,
-        decoder_layers=config.decoder_layers,
-        max_src_len=config.max_src_len,
-        max_target_len=config.max_target_len,
-        positional_encoding=config.positional_encoding,
-        attention_type=config.attention_type,
-        norm_type=config.norm_type,
-        dropout=config.dropout,
-    ).to(device)
+    if config.tokenizer_type == "blt":
+        model = BLTSeq2SeqTransformer(
+            d_model=config.d_model,
+            num_heads=config.num_heads,
+            ffn_dim=config.ffn_dim,
+            encoder_layers=config.encoder_layers,
+            decoder_layers=config.decoder_layers,
+            max_src_len=config.max_src_len,
+            max_target_len=config.max_target_len,
+            patch_size=config.blt_patch_size,
+            local_dim=config.blt_local_dim,
+            dropout=config.dropout,
+        ).to(device)
+        target_pad_id = BYTE_PAD_ID
+    else:
+        model = Seq2SeqTransformer(
+            src_vocab_size=cipher_tokenizer.get_vocab_size(),
+            target_vocab_size=plain_tokenizer.get_vocab_size(),
+            src_pad_id=cipher_tokenizer.pad_token_id,
+            target_pad_id=plain_tokenizer.pad_token_id,
+            d_model=config.d_model,
+            num_heads=config.num_heads,
+            ffn_dim=config.ffn_dim,
+            encoder_layers=config.encoder_layers,
+            decoder_layers=config.decoder_layers,
+            max_src_len=config.max_src_len,
+            max_target_len=config.max_target_len,
+            positional_encoding=config.positional_encoding,
+            attention_type=config.attention_type,
+            norm_type=config.norm_type,
+            dropout=config.dropout,
+        ).to(device)
+        target_pad_id = plain_tokenizer.pad_token_id
 
-    loss_fn = nn.CrossEntropyLoss(ignore_index=plain_tokenizer.pad_token_id)
+    loss_fn = nn.CrossEntropyLoss(ignore_index=target_pad_id)
 
     optimizer = torch.optim.Adam(
         model.parameters(),
@@ -291,7 +322,10 @@ def train_experiment(config):
         },
     )
     artifact.add_dir(checkpoint_dir)
-    run.log_artifact(artifact)
+    try:
+        run.log_artifact(artifact)
+    except Exception:
+        logger.warning("W&B artifact logging failed; continuing.", exc_info=True)
 
     if config.upload_to_hf:
         upload_checkpoint_to_huggingface(
@@ -334,7 +368,7 @@ def parse_args():
         type=str.upper,
         default="C1",
         choices=TRAINABLE_CONFIG_NAMES,
-        help="Experiment config to train: C1, C2, C3, or C4.",
+        help="Experiment config to train: C1, C2, C3, C4, or C5.",
     )
     return parser.parse_args()
 
