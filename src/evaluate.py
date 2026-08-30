@@ -1,3 +1,4 @@
+import argparse
 import csv
 import json
 import logging
@@ -38,7 +39,7 @@ def load_json(path):
         return json.load(f)
 
 
-def load_c1_checkpoint(checkpoint_dir, device):
+def load_checkpoint(checkpoint_dir, device):
     config = ExperimentConfig(**load_json(os.path.join(checkpoint_dir, "config.json")))
     cipher_tokenizer = BPETokenizer.load(os.path.join(checkpoint_dir, "cipher_tokenizer.json"))
     plain_tokenizer = BPETokenizer.load(os.path.join(checkpoint_dir, "plain_tokenizer.json"))
@@ -55,6 +56,9 @@ def load_c1_checkpoint(checkpoint_dir, device):
         decoder_layers=config.decoder_layers,
         max_src_len=config.max_src_len,
         max_target_len=config.max_target_len,
+        positional_encoding=config.positional_encoding,
+        attention_type=config.attention_type,
+        norm_type=config.norm_type,
         dropout=config.dropout,
     ).to(device)
 
@@ -137,7 +141,7 @@ def evaluate_experiment(base_config, max_examples=100):
     checkpoint_dir = base_config.checkpoint_dir
     device = "mps" if torch.backends.mps.is_available() else "cpu"
 
-    model, config, cipher_tokenizer, plain_tokenizer = load_c1_checkpoint(
+    model, config, cipher_tokenizer, plain_tokenizer = load_checkpoint(
         checkpoint_dir=checkpoint_dir,
         device=device,
     )
@@ -258,9 +262,42 @@ def evaluate_available_experiments(max_examples=100):
     return experiment_rows
 
 
+def get_experiment_by_name(name):
+    for config in EXPERIMENTS:
+        if config.name.lower() == name.lower():
+            return config
+
+    supported = ", ".join(config.name.lower() for config in EXPERIMENTS)
+    raise ValueError(f"Unknown experiment {name}. Supported values: {supported}")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Evaluate ANLP assignment experiments.")
+    parser.add_argument(
+        "--config",
+        default="all",
+        help="Experiment config to evaluate: C1, C2, C3, C4, C5, or all.",
+    )
+    parser.add_argument(
+        "--max-examples",
+        type=int,
+        default=100,
+        help="Maximum number of test examples to decode per experiment.",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
-    evaluate_available_experiments()
+    args = parse_args()
+
+    if args.config.lower() == "all":
+        evaluate_available_experiments(max_examples=args.max_examples)
+    else:
+        evaluate_experiment(
+            base_config=get_experiment_by_name(args.config),
+            max_examples=args.max_examples,
+        )

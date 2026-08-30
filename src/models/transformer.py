@@ -23,25 +23,55 @@ class Seq2SeqTransformer(nn.Module):
                  decoder_layers,
                  max_src_len,
                  max_target_len,
+                 positional_encoding="sinusoidal",
+                 attention_type="mha",
+                 norm_type="layernorm",
                  dropout=0.1,) -> None:
         super().__init__()
+        use_rope = positional_encoding == "rope"
+
+        if positional_encoding not in ("sinusoidal", "rope"):
+            raise ValueError(f"Unsupported positional_encoding: {positional_encoding}")
+
         self.src_embedding = TokenEmbedding(src_vocab_size,d_model=d_model,pad_id=src_pad_id)
         self.target_embedding = TokenEmbedding(target_vocab_size,d_model=d_model,pad_id=target_pad_id)
 
-        self.src_positional_encoding = SinusoidalPositionalEncoding(
-            d_model=d_model,
-            max_len= max_src_len,
-            dropout=dropout
-        )
+        if use_rope:
+            self.src_positional_encoding = nn.Dropout(dropout)
+            self.target_positional_encoding = nn.Dropout(dropout)
+        else:
+            self.src_positional_encoding = SinusoidalPositionalEncoding(
+                d_model=d_model,
+                max_len= max_src_len,
+                dropout=dropout
+            )
 
-        self.target_positional_encoding = SinusoidalPositionalEncoding(
-            d_model=d_model,
-            max_len=max_target_len,
-            dropout=dropout
-        )
+            self.target_positional_encoding = SinusoidalPositionalEncoding(
+                d_model=d_model,
+                max_len=max_target_len,
+                dropout=dropout
+            )
 
-        self.encoder = Encoder(d_model=d_model,num_heads=num_heads,ffn_dim=ffn_dim,num_layers=encoder_layers,dropout=dropout)
-        self.decoder = Decoder(d_model=d_model,num_heads=num_heads,ffn_dim=ffn_dim,num_layers=decoder_layers,dropout=dropout)
+        self.encoder = Encoder(
+            d_model=d_model,
+            num_heads=num_heads,
+            ffn_dim=ffn_dim,
+            num_layers=encoder_layers,
+            dropout=dropout,
+            attention_type=attention_type,
+            norm_type=norm_type,
+            use_rope=use_rope,
+        )
+        self.decoder = Decoder(
+            d_model=d_model,
+            num_heads=num_heads,
+            ffn_dim=ffn_dim,
+            num_layers=decoder_layers,
+            dropout=dropout,
+            attention_type=attention_type,
+            norm_type=norm_type,
+            use_rope=use_rope,
+        )
 
         self.output_projection = nn.Linear(d_model,target_vocab_size)
 
@@ -106,5 +136,4 @@ def test_seq2seqtransformer():
 
 
     
-
 

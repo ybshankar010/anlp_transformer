@@ -1,6 +1,7 @@
 import logging
 import os
 import json
+import argparse
 from dataclasses import asdict
 import torch
 import torch.nn as nn
@@ -21,6 +22,7 @@ from src.plots import plot_training_history
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+TRAINABLE_CONFIG_NAMES = ["C1", "C2", "C3", "C4"]
 
 def train_one_epoch(model, train_loader, loss_fn, optimizer, device):
     model.train()
@@ -147,8 +149,7 @@ def upload_checkpoint_to_huggingface(checkpoint_dir, repo_id, path_in_repo):
         path_in_repo=path_in_repo,
     )
 
-def train_c1():
-    config = EXPERIMENTS[0]
+def train_experiment(config):
 
     run = wandb.init(
         project=config.wandb_project,
@@ -202,6 +203,9 @@ def train_c1():
         decoder_layers=config.decoder_layers,
         max_src_len=config.max_src_len,
         max_target_len=config.max_target_len,
+        positional_encoding=config.positional_encoding,
+        attention_type=config.attention_type,
+        norm_type=config.norm_type,
         dropout=config.dropout,
     ).to(device)
 
@@ -278,7 +282,7 @@ def train_c1():
     )
 
     artifact = wandb.Artifact(
-        name="c1-transformer",
+        name=f"{config.name.lower()}-transformer",
         type="model",
         metadata={
             "repo_id": config.hf_repo_id,
@@ -297,9 +301,48 @@ def train_c1():
         )
     wandb.finish()
 
+
+def get_experiment_by_name(name):
+    for config in EXPERIMENTS:
+        if config.name.lower() == name.lower():
+            return config
+
+    supported = ", ".join(config.name.lower() for config in EXPERIMENTS)
+    raise ValueError(f"Unknown experiment {name}. Supported values: {supported}")
+
+
+def train_c1():
+    train_experiment(EXPERIMENTS[0])
+
+
+def train_c2():
+    train_experiment(get_experiment_by_name("C2"))
+
+
+def train_c3():
+    train_experiment(get_experiment_by_name("C3"))
+
+
+def train_c4():
+    train_experiment(get_experiment_by_name("C4"))
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train one ANLP assignment experiment.")
+    parser.add_argument(
+        "--config",
+        type=str.upper,
+        default="C1",
+        choices=TRAINABLE_CONFIG_NAMES,
+        help="Experiment config to train: C1, C2, C3, or C4.",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
-    train_c1()
+    args = parse_args()
+    train_experiment(get_experiment_by_name(args.config))
