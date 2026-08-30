@@ -12,3 +12,5 @@ wheels/
 ./Dataset_A1/
 
 ./Assignment.md
+
+.env
