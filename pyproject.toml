@@ -6,6 +6,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "bidict>=0.24.1",
+    "dotenv>=0.9.9",
     "numpy>=2.5.2",
+    "tokenizers>=0.23.1",
     "torch>=2.13.0",
+    "transformers>=5.16.1",
 ]

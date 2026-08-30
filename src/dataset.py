@@ -3,13 +3,20 @@
 import logging
 from typing import Any
 import numpy as np
+import os
 
 
 from collections import Counter
 from src.constants import PLAIN_TEXT_PATH,CIPHER_TEXT_PATH
 from src.utils import get_lines_from_file_path
+from dotenv import load_dotenv
+load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+HUGGINGFACE_EMBEDDING_EABLED = (
+    os.getenv("HUGGINGFACE_EMBEDDING_EABLED", "false").lower()=="true"
+)
 
 #EDA 
 class EDA:
@@ -67,7 +74,9 @@ class EDA:
 #Dataset classes
 from torch.utils.data import Dataset,random_split,DataLoader
 from torch.nn.utils.rnn import pad_sequence
+from transformers import AutoTokenizer
 from .utils import ExperimentConfig,encode_text, EXPERIMENTS
+from .tokenizer import BPETokenizer
 import torch
 
 class CipherPlainDataset(Dataset):
@@ -88,12 +97,58 @@ class CipherPlainDataset(Dataset):
         cipher = self.cipher_data[index]
 
         return {
-            "cipher_text" : torch.tensor(encode_text(cipher),dtype=torch.long),
+            "cipher_text" : cipher,
             "plain_text" : plain
             }
         
     def __len__(self)-> int:
         return len(self.cipher_data)
+
+
+class CipherPlainDatasetCollator: 
+
+    def __init__(self,cipher_tokenizer: BPETokenizer,plain_text_tokenizer: BPETokenizer,src_pad_id = 0, max_target_len = 256) -> None:
+
+        self.cipher_tokenizer = cipher_tokenizer
+        self.plain_text_tokenizer = plain_text_tokenizer
+        self.bos_id = self.plain_text_tokenizer.bos_token_id
+        self.eos_id = self.plain_text_tokenizer.eos_token_id
+        self.pad_id = self.plain_text_tokenizer.pad_token_id
+            
+
+        self.src_pad_id = cipher_tokenizer.pad_token_id
+        self.max_target_len = max_target_len
+
+
+    def __call__(self, batch) -> Any:
+        cipher_ids = [
+            torch.tensor(self.cipher_tokenizer.encode(item["cipher_text"]),dtype=torch.long) for item in batch
+        ]
+        plain_text = [item["plain_text"] for item in batch] 
+        padded_sequence = pad_sequence(
+            cipher_ids,
+            batch_first=True,
+            padding_value=self.src_pad_id
+        )
+        cipher_padding_mask = (padded_sequence == self.src_pad_id)
+
+        plain_text_ids = [self.plain_text_tokenizer.encode(text) for text in plain_text]
+
+        plain_text_input_ids = [torch.tensor(([self.bos_id] + ids[: self.max_target_len - 1]),dtype=torch.long) for ids in plain_text_ids]
+        plain_text_padded_input_ids = pad_sequence(plain_text_input_ids,batch_first = True,padding_value = self.pad_id)
+        plain_text_target_ids = [torch.tensor((ids[: self.max_target_len - 1] + [self.eos_id]),dtype=torch.long) for ids in plain_text_ids]
+        plain_text_padded_target_ids = pad_sequence(plain_text_target_ids,batch_first = True,padding_value = self.pad_id)
+
+        plain_text_padding_mask = plain_text_padded_input_ids == self.pad_id
+
+        return {
+            "cipher_text" : padded_sequence,
+            "cipher_padding_mask" : cipher_padding_mask,
+            "plain_text" : plain_text,
+            "plain_text_input_ids" : plain_text_padded_input_ids,
+            "plain_text_target_ids" : plain_text_padded_target_ids,
+            "plain_text_padding_mask" : plain_text_padding_mask
+        }
 
 
 def create_datasplits(dataset: CipherPlainDataset, config: ExperimentConfig):
@@ -111,32 +166,33 @@ def create_datasplits(dataset: CipherPlainDataset, config: ExperimentConfig):
         generator=generator
     )
 
-def cipher_plain_collate(batch):
-    cipher_ids = [item["cipher_text"] for item in batch]
-    plain_text = [item["plain_text"] for item in batch] 
-
-    padded_sequence = pad_sequence(
-        cipher_ids,
-        batch_first=True,
-        padding_value=0
-    )
-
-    cipher_padding_mask = (padded_sequence == 0)
-
-    return {
-        "cipher_text" : padded_sequence,
-        "cipher_padding_mask" : cipher_padding_mask,
-        "plain_text" : plain_text
-    }
 
 
 def test():
-    train_dataset, _, _ = create_datasplits(CipherPlainDataset(),EXPERIMENTS[0])
+    dataset = CipherPlainDataset()
+    train_dataset, _, _ = create_datasplits(dataset,EXPERIMENTS[0])
+
+    cipher_dataset = [item["cipher_text"] for item in train_dataset]
+    plain_dataset = [item["plain_text"] for item in train_dataset]
+
+    # tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
+    cipher_tokenizer = BPETokenizer(vocab_size=100)
+    plain_tokenizer = BPETokenizer(vocab_size=100)
+
+    cipher_tokenizer.train(cipher_dataset[:100])
+    plain_tokenizer.train(plain_dataset[:100])
+
+    collator = CipherPlainDatasetCollator(
+        cipher_tokenizer=cipher_tokenizer,
+        plain_text_tokenizer=plain_tokenizer,
+        max_target_len=EXPERIMENTS[0].max_target_len
+    )
+
     train_loader = DataLoader(
         train_dataset,
         batch_size= EXPERIMENTS[0].batch_size,
         shuffle=True,
-        collate_fn=cipher_plain_collate
+        collate_fn=collator
     )
 
     batch = next(iter(train_loader))
@@ -144,6 +200,9 @@ def test():
     logger.debug(batch["cipher_text"].shape)
     logger.debug(batch["cipher_padding_mask"].shape)
     logger.debug(batch["plain_text"][0][:100])
+    logger.debug(batch["plain_text_input_ids"].shape)
+    logger.debug(batch["plain_text_target_ids"].shape)
+    logger.debug(batch["plain_text_padding_mask"].shape)
 
 
 
