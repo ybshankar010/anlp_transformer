@@ -17,6 +17,7 @@ from src.utils import EXPERIMENTS
 import wandb
 from huggingface_hub import HfApi
 from dotenv import load_dotenv
+from src.plots import plot_training_history
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,7 @@ def save_checkpoint(
     epoch,
     train_loss,
     validation_loss,
+    history=None,
 ):
     os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -121,10 +123,14 @@ def save_checkpoint(
                 "epoch": epoch,
                 "train_loss": train_loss,
                 "validation_loss": validation_loss,
+                "history": history or [],
             },
             f,
             indent=2,
         )
+
+    with open(os.path.join(checkpoint_dir, "training_history.json"), "w") as f:
+        json.dump(history or [], f, indent=2)
 
 def upload_checkpoint_to_huggingface(checkpoint_dir, repo_id):
     api = HfApi()
@@ -208,6 +214,7 @@ def train_c1():
     checkpoint_dir = config.checkpoint_dir
 
     best_validation_loss = float("inf")
+    history = []
 
     for epoch in range(config.epochs):
         train_loss = train_one_epoch(
@@ -232,6 +239,14 @@ def train_c1():
             validation_loss,
         )
 
+        history.append(
+            {
+                "epoch": epoch + 1,
+                "train_loss": train_loss,
+                "validation_loss": validation_loss,
+            }
+        )
+
         wandb.log(
             {
                 "epoch": epoch + 1,
@@ -252,8 +267,14 @@ def train_c1():
                 epoch=epoch + 1,
                 train_loss=train_loss,
                 validation_loss=validation_loss,
+                history=history,
             )
             logger.info("Saved best checkpoint to %s", checkpoint_dir)
+
+    plot_training_history(
+        history=history,
+        output_path=os.path.join(checkpoint_dir, "training_loss.png"),
+    )
 
     artifact = wandb.Artifact(
         name="c1-transformer",

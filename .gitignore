@@ -14,3 +14,7 @@ wheels/
 ./Assignment.md
 
 .env
+
+# Experiment outputs
+checkpoints/
+wandb/

@@ -41,15 +41,38 @@ class ExperimentConfig:
     learning_rate: float = 3e-4
     epochs: int = 20
     checkpoint_dir: str = "checkpoints/c1"
+    output_dir: str = "outputs"
     wandb_project: str = "anlp-assignment1"
     hf_repo_id: str = "ybs010/anlp-assignment1-c1"
     upload_to_hf: bool = True
 
-EXPERIMENTS = [ExperimentConfig(),
-               ExperimentConfig(name="C2",positional_encoding="rope"),
-               ExperimentConfig(name="C3",attention_type="gqa"),
-               ExperimentConfig(name="C4",norm_type="rmsnorm"),
-               ExperimentConfig(name="C5",tokenizer_type="blt"),]
+EXPERIMENTS = [
+    ExperimentConfig(),
+    ExperimentConfig(
+        name="C2",
+        positional_encoding="rope",
+        checkpoint_dir="checkpoints/c2",
+        hf_repo_id="ybs010/anlp-assignment1-c2",
+    ),
+    ExperimentConfig(
+        name="C3",
+        attention_type="gqa",
+        checkpoint_dir="checkpoints/c3",
+        hf_repo_id="ybs010/anlp-assignment1-c3",
+    ),
+    ExperimentConfig(
+        name="C4",
+        norm_type="rmsnorm",
+        checkpoint_dir="checkpoints/c4",
+        hf_repo_id="ybs010/anlp-assignment1-c4",
+    ),
+    ExperimentConfig(
+        name="C5",
+        tokenizer_type="blt",
+        checkpoint_dir="checkpoints/c5",
+        hf_repo_id="ybs010/anlp-assignment1-c5",
+    ),
+]
 
 
 def print_experiment_configs():

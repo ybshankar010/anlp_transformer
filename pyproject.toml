@@ -8,6 +8,7 @@ dependencies = [
     "bidict>=0.24.1",
     "dotenv>=0.9.9",
     "huggingface-hub>=1.29.0",
+    "matplotlib>=3.11.0",
     "numpy>=2.5.2",
     "torch>=2.13.0",
     "wandb>=0.29.0",
