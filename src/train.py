@@ -179,11 +179,11 @@ def train_experiment(config):
         cipher_texts = [item["cipher_text"] for item in train_dataset]
         plain_texts = [item["plain_text"] for item in train_dataset]
 
-        cipher_tokenizer = BPETokenizer(vocab_size=100)
-        plain_tokenizer = BPETokenizer(vocab_size=100)
+        cipher_tokenizer = BPETokenizer(vocab_size=200)
+        plain_tokenizer = BPETokenizer(vocab_size=200)
 
-        cipher_tokenizer.train(cipher_texts[:1000])
-        plain_tokenizer.train(plain_texts[:1000])
+        cipher_tokenizer.train(cipher_texts[:3000])
+        plain_tokenizer.train(plain_texts[:3000])
 
         collator = CipherPlainDatasetCollator(
             cipher_tokenizer=cipher_tokenizer,

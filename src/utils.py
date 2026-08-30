@@ -41,7 +41,7 @@ class ExperimentConfig:
     #training
     batch_size: int = 2
     learning_rate: float = 3e-4
-    epochs: int = 20
+    epochs: int = 50
     checkpoint_dir: str = "checkpoints/c1"
     output_dir: str = "outputs"
     wandb_project: str = "anlp-assignment1"
