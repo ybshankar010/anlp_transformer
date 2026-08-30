@@ -1,5 +1,3 @@
-from typing import Any
-
 import torch
 import torch.nn as nn
 import logging
@@ -44,7 +42,7 @@ class Encoder(nn.Module):
     def forward(self,x,src_mask=None):
 
         for encoder_layer in self.encoder_layers:
-            x = encoder_layer(x)
+            x = encoder_layer(x,src_mask)
 
         return x
 

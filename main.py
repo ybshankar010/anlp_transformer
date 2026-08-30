@@ -5,6 +5,8 @@ from src.models.positional import test_positional_encoding
 from src.models.attention import test_scaled_dotproduct
 from src.models.feedforward import test_ffn
 from src.models.encoder import test_encoder_layer
+from src.models.decoder import test_decoder_layer
+from src.models.masks import create_causal_mask
 
 from dotenv import load_dotenv
 
@@ -18,6 +20,8 @@ logging.basicConfig(
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+logger= logging.getLogger(__name__)
 
 def perform_EDA():
     eda = EDA()
@@ -35,3 +39,7 @@ if __name__ == "__main__":
     test_scaled_dotproduct()
     test_ffn()
     test_encoder_layer()
+    test_decoder_layer()
+    mask = create_causal_mask(4)
+    logger.debug("Mask shape %s", mask.shape)
+    logger.debug("Mask %s ",mask[0,0])
