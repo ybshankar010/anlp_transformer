@@ -1,6 +1,5 @@
 import logging
 from dataclasses import dataclass
-from .constants import SRC_TOKEN_TO_ID_MAP
 
 
 logger = logging.getLogger(__name__)
@@ -25,11 +24,11 @@ class ExperimentConfig:
     tokenizer_type: str = "subword"
 
     #model
-    d_model: int = 256
-    num_heads: int = 8
-    encoder_layers: int = 4
-    decoder_layers: int = 4
-    ffn_dim: int = 1024
+    d_model: int = 128
+    num_heads: int = 4
+    encoder_layers: int = 2
+    decoder_layers: int = 2
+    ffn_dim: int = 512
     dropout: float = 0.1
 
     #abalation study
@@ -38,9 +37,13 @@ class ExperimentConfig:
     norm_type: str = "layernorm"
 
     #training
-    batch_size: int = 16
+    batch_size: int = 2
     learning_rate: float = 3e-4
     epochs: int = 20
+    checkpoint_dir: str = "checkpoints/c1"
+    wandb_project: str = "anlp-assignment1"
+    hf_repo_id: str = "ybs010/anlp-assignment1-c1"
+    upload_to_hf: bool = True
 
 EXPERIMENTS = [ExperimentConfig(),
                ExperimentConfig(name="C2",positional_encoding="rope"),
@@ -66,7 +69,3 @@ def get_lines_from_file_path(file_path):
     except Exception as exec:
         logger.error("Can't read the file ",exc_info=exec)
         return []
-
-
-def encode_text(cipher_text) : 
-    return [SRC_TOKEN_TO_ID_MAP[ch] for ch in cipher_text]

@@ -1,6 +1,7 @@
 from bidict import bidict
 from collections import Counter
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,42 @@ class BPETokenizer:
         tokens = [self.token_to_id.inverse[idx] for idx in ids]
         tokens = [token for token in tokens if token not in self.special_tokens]
         return "".join(tokens)
+
+    def to_dict(self):
+        return {
+            "vocab_size": self.vocab_size,
+            "special_tokens": self.special_tokens,
+            "token_to_id": dict(self.token_to_id),
+            "merges": [
+                {
+                    "pair": list(pair),
+                    "token": token,
+                }
+                for pair, token in self.merges
+            ],
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        tokenizer = cls(
+            vocab_size=data["vocab_size"],
+            special_tokens=data["special_tokens"],
+        )
+        tokenizer.token_to_id = bidict(data["token_to_id"])
+        tokenizer.merges = [
+            (tuple(merge["pair"]), merge["token"])
+            for merge in data["merges"]
+        ]
+        return tokenizer
+
+    def save(self, path):
+        with open(path, "w") as f:
+            json.dump(self.to_dict(), f, indent=2)
+
+    @classmethod
+    def load(cls, path):
+        with open(path) as f:
+            return cls.from_dict(json.load(f))
 
     def train(self, texts):
         #Simple tokenization

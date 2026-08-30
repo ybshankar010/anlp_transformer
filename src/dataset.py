@@ -3,20 +3,13 @@
 import logging
 from typing import Any
 import numpy as np
-import os
 
 
 from collections import Counter
 from src.constants import PLAIN_TEXT_PATH,CIPHER_TEXT_PATH
 from src.utils import get_lines_from_file_path
-from dotenv import load_dotenv
-load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-HUGGINGFACE_EMBEDDING_EABLED = (
-    os.getenv("HUGGINGFACE_EMBEDDING_EABLED", "false").lower()=="true"
-)
 
 #EDA 
 class EDA:
@@ -74,8 +67,7 @@ class EDA:
 #Dataset classes
 from torch.utils.data import Dataset,random_split,DataLoader
 from torch.nn.utils.rnn import pad_sequence
-from transformers import AutoTokenizer
-from .utils import ExperimentConfig,encode_text, EXPERIMENTS
+from .utils import ExperimentConfig, EXPERIMENTS
 from .tokenizer import BPETokenizer
 import torch
 
@@ -107,7 +99,7 @@ class CipherPlainDataset(Dataset):
 
 class CipherPlainDatasetCollator: 
 
-    def __init__(self,cipher_tokenizer: BPETokenizer,plain_text_tokenizer: BPETokenizer,src_pad_id = 0, max_target_len = 256) -> None:
+    def __init__(self,cipher_tokenizer: BPETokenizer,plain_text_tokenizer: BPETokenizer,max_src_len = 1024, max_target_len = 256) -> None:
 
         self.cipher_tokenizer = cipher_tokenizer
         self.plain_text_tokenizer = plain_text_tokenizer
@@ -117,13 +109,20 @@ class CipherPlainDatasetCollator:
             
 
         self.src_pad_id = cipher_tokenizer.pad_token_id
+
+        self.max_src_len = max_src_len
         self.max_target_len = max_target_len
 
 
     def __call__(self, batch) -> Any:
         cipher_ids = [
-            torch.tensor(self.cipher_tokenizer.encode(item["cipher_text"]),dtype=torch.long) for item in batch
+           torch.tensor(
+               self.cipher_tokenizer.encode(item["cipher_text"])[: self.max_src_len],
+               dtype=torch.long,
+           )
+           for item in batch
         ]
+       
         plain_text = [item["plain_text"] for item in batch] 
         padded_sequence = pad_sequence(
             cipher_ids,
@@ -203,6 +202,5 @@ def test_dataset_preparation():
     logger.debug(batch["plain_text_input_ids"].shape)
     logger.debug(batch["plain_text_target_ids"].shape)
     logger.debug(batch["plain_text_padding_mask"].shape)
-
 
 
