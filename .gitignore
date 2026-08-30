@@ -20,3 +20,4 @@ checkpoints/
 wandb/
 
 .DS_Store
+outputs/
