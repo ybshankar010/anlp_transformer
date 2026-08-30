@@ -168,7 +168,7 @@ def create_datasplits(dataset: CipherPlainDataset, config: ExperimentConfig):
 
 
 
-def test():
+def test_dataset_preparation():
     dataset = CipherPlainDataset()
     train_dataset, _, _ = create_datasplits(dataset,EXPERIMENTS[0])
 

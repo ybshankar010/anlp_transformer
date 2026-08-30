@@ -8,6 +8,7 @@ binary sequences to plaintext.
 Do not use:
 - nn.Transformer
 - nn.MultiheadAttention
+- prebuilt tokenizers from libraries
 
 The purpose is not merely to achieve high accuracy.
 The goal is to understand, implement, and experimentally compare Transformer
@@ -38,7 +39,7 @@ Prefer discussing tensor shapes and data flow.
 - Sinusoidal absolute positional encoding
 - Multi-Head Attention
 - LayerNorm
-- Standard subword tokenization
+- Learned subword tokenization implemented from scratch
 
 ## C2
 Change only:
@@ -54,7 +55,7 @@ Change only:
 
 ## C5
 Change only tokenization/model input:
-- Standard tokenizer -> simplified Byte Latent Transformer
+- Scratch BPE-style tokenizer -> simplified Byte Latent Transformer
 - Raw bytes
 - Local encoder
 - Byte patches
@@ -104,28 +105,21 @@ Do NOT choose tokenization until this analysis is complete.
 
 ### 1B - Dataset Design
 
-After EDA, determine:
+After EDA, keep the raw aligned dataset separate from tokenization.
 
-cipher:
-raw sequence
--> representation
--> IDs
--> padding/masking
--> tensor
+Each raw example should preserve:
+
+ciphertext:
+raw encrypted binary string
 
 plaintext:
-sentence
--> tokenizer
--> token IDs
--> BOS/EOS
--> padding/masking
--> tensor
+raw English text string
 
 Understand:
-- source sequence
-- target sequence
-- decoder input
-- decoder target
+- source text
+- target text
+- line alignment
+- why splitting must happen at the pair level
 
 ### 1C - Data Split
 
@@ -136,7 +130,106 @@ Create reproducible:
 
 Use a fixed random seed.
 
-### 1D - Experiment Configuration
+Split the raw aligned pairs before tokenizer training.
+
+Do not train tokenizers on validation or test examples.
+
+### 1D - Scratch BPE Tokenizers
+
+For C1-C4, implement learned subword tokenization from scratch.
+
+Do not use:
+- Hugging Face tokenizers
+- SentencePiece library
+- tokenizers library
+- pretrained tokenizers
+- fixed-width chunking such as 8 bits = 1 token
+
+Fixed-width bit grouping does not count as learned subword tokenization.
+
+Recommended tokenizer:
+BPE-style tokenizer learned from adjacent pair frequencies.
+
+Train two tokenizer instances:
+
+cipher tokenizer:
+training ciphertext only
+-> learned binary subword units
+-> source token IDs
+
+plaintext tokenizer:
+training plaintext only
+-> learned text subword units
+-> target token IDs
+
+Both tokenizers should support:
+- special tokens such as PAD, UNK, BOS, EOS
+- train(texts)
+- encode(text)
+- decode(ids)
+- saved vocabulary / merge rules if practical
+
+For ciphertext, initial tokens may be individual characters:
+- "0"
+- "1"
+
+Learned merge examples may become variable-length tokens such as:
+- "01"
+- "110"
+- "00101"
+
+This is acceptable because token boundaries are learned from data frequency.
+
+This is not acceptable:
+- always grouping every 4 bits
+- always grouping every 8 bits
+- always grouping every N bits
+
+### 1E - Tensor Dataset + Collation
+
+After train/validation/test split and tokenizer training, convert examples into
+model-ready tensors:
+
+cipher:
+raw sequence
+-> scratch BPE tokenizer
+-> source token IDs
+-> padding/masking
+-> tensor
+
+plaintext:
+sentence
+-> scratch BPE tokenizer
+-> target token IDs
+-> BOS/EOS
+-> padding/masking
+-> tensor
+
+Understand:
+- source sequence
+- target sequence
+- decoder input
+- decoder target
+
+For decoder training:
+
+plaintext token IDs:
+target_ids
+
+decoder input:
+BOS + target_ids
+
+decoder target:
+target_ids + EOS
+
+Batch collation should produce:
+- source input IDs
+- source padding mask
+- decoder input IDs
+- decoder target IDs
+- target padding mask
+
+### 1F - Experiment Configuration
 
 Create one configuration mechanism containing things such as:
 
@@ -153,10 +246,14 @@ Create one configuration mechanism containing things such as:
 - attention type
 - normalization type
 - tokenizer type
+- source vocabulary size
+- target vocabulary size
+- BPE merge count or vocabulary limit
+- minimum merge frequency if used
 
 C1-C5 should primarily be controlled through configuration rather than duplicated code.
 
-### 1E - Metrics
+### 1G - Metrics
 
 Eventually support:
 
@@ -168,7 +265,7 @@ Eventually support:
 
 Use greedy decoding for evaluation.
 
-### 1F - Experiment Logging
+### 1H - Experiment Logging
 
 Use Weights & Biases.
 
@@ -185,6 +282,14 @@ training:
 - epoch
 - global step
 - learning rate
+
+tokenization:
+- source tokenizer type
+- target tokenizer type
+- source vocabulary size
+- target vocabulary size
+- number of learned merges
+- sequence lengths after tokenization
 
 performance:
 - epoch duration / training time

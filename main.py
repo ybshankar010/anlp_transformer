@@ -1,6 +1,8 @@
 import logging
-from src.dataset import EDA,test
+from src.dataset import EDA,test_dataset_preparation
 from src.utils import print_experiment_configs
+from src.models.positional import test_positional_encoding
+from src.models.attention import test_scaled_dotproduct
 
 from dotenv import load_dotenv
 
@@ -26,4 +28,6 @@ def main():
 if __name__ == "__main__":
     perform_EDA()
     print_experiment_configs()
-    test()
+    test_dataset_preparation()
+    test_positional_encoding()
+    test_scaled_dotproduct()
