@@ -1,3 +1,5 @@
+from typing import Any
+
 import torch
 import torch.nn as nn
 import logging
@@ -31,6 +33,21 @@ class EncoderLayer(nn.Module):
         return x
 
 
+class Encoder(nn.Module):
+    def __init__(self,d_model,num_heads,ffn_dim, num_layers,dropout=0.1) -> None:
+        super().__init__()
+        self.encoder_layers = nn.ModuleList([
+            EncoderLayer(d_model=d_model,num_heads=num_heads,ffn_dim=ffn_dim,dropout=dropout)
+            for _ in range(num_layers)
+        ])
+
+    def forward(self,x,src_mask=None):
+
+        for encoder_layer in self.encoder_layers:
+            x = encoder_layer(x)
+
+        return x
+
 
 def test_encoder_layer():
     x = torch.randn(16,100,256)
@@ -39,4 +56,8 @@ def test_encoder_layer():
     y = layer(x)
     logger.debug("=========== TEST Encoder Layer ==============")
     logger.debug("Shape of y after encoder layer %s",y.shape)
-        
+
+    encoder = Encoder(d_model=256,num_heads=8,ffn_dim=1024,num_layers=8)
+    y = encoder(x)
+
+    logger.debug("Shape of y for passing through encoder stack %s",y.shape)
