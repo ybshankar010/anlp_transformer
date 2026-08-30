@@ -8,6 +8,8 @@ from src.models.encoder import test_encoder_layer
 from src.models.decoder import test_decoder_layer
 from src.models.masks import create_causal_mask
 
+from src.models.transformer import test_seq2seqtransformer
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -43,3 +45,5 @@ if __name__ == "__main__":
     mask = create_causal_mask(4)
     logger.debug("Mask shape %s", mask.shape)
     logger.debug("Mask %s ",mask[0,0])
+
+    test_seq2seqtransformer()
