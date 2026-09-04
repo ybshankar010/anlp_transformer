@@ -24,6 +24,7 @@ class ExperimentConfig:
     bos_id: int = 1
     eos_id: int = 2
     tokenizer_type: str = "subword"
+    vocab_size: int = 500
 
     #model
     d_model: int = 128
